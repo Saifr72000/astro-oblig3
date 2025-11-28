@@ -1,0 +1,348 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import {
+  fetchFilms,
+  fetchFilm,
+  fetchPerson,
+  fetchSpeciesByUrl,
+  fetchLocation,
+  fetchVehicle,
+  isValidResourceUrl,
+} from '../../lib/api';
+import { getFilmBanner } from '../../lib/images';
+import type { Person, Species } from '../../lib/types';
+
+// Generate all film pages at build time
+export async function getStaticPaths() {
+  const films = await fetchFilms();
+  return films.map((film) => ({
+    params: { id: film.id },
+  }));
+}
+
+const { id } = Astro.params;
+const film = await fetchFilm(id!);
+
+if (!film) {
+  return Astro.redirect('/404');
+}
+
+const bannerSrc = getFilmBanner(film.id, film.movie_banner || film.image);
+
+// Fetch all people (characters)
+const validPeopleUrls = film.people.filter(isValidResourceUrl);
+const peoplePromises = validPeopleUrls.map((url) => fetchPerson(url));
+const people = await Promise.all(peoplePromises);
+const validPeople = people.filter((p): p is Person => p !== null);
+
+// Fetch species for each person
+const enrichedPeople = await Promise.all(
+  validPeople.map(async (person) => {
+    let speciesData: Species | null = null;
+    if (
+      person.species &&
+      typeof person.species === 'string' &&
+      person.species.startsWith('http')
+    ) {
+      speciesData = await fetchSpeciesByUrl(person.species);
+    }
+    return { ...person, speciesData };
+  })
+);
+
+// Fetch locations
+const validLocationUrls = film.locations.filter(isValidResourceUrl);
+const locationsPromises = validLocationUrls.map((url) => fetchLocation(url));
+const locations = await Promise.all(locationsPromises);
+const validLocations = locations.filter((l) => l !== null);
+
+// Fetch species
+const validSpeciesUrls = film.species.filter(isValidResourceUrl);
+const speciesPromises = validSpeciesUrls.map((url) => fetchSpeciesByUrl(url));
+const species = await Promise.all(speciesPromises);
+const validSpecies = species.filter((s) => s !== null);
+
+// Fetch vehicles
+const validVehicleUrls = film.vehicles.filter(isValidResourceUrl);
+const vehiclesPromises = validVehicleUrls.map((url) => fetchVehicle(url));
+const vehicles = await Promise.all(vehiclesPromises);
+const validVehicles = vehicles.filter((v) => v !== null);
+
+// Helper functions
+function getInitials(name: string): string {
+  if (!name) return '?';
+  const parts = name.split(' ');
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+  return name.substring(0, 2).toUpperCase();
+}
+
+function getAvatarColor(gender: string): string {
+  if (!gender) return 'avatar-neutral';
+  const genderLower = gender.toLowerCase();
+  if (genderLower === 'female') return 'avatar-female';
+  if (genderLower === 'male') return 'avatar-male';
+  return 'avatar-neutral';
+}
+
+function capitalize(str: string): string {
+  if (!str || str === 'n/a' || str === 'NA') return str;
+  return str
+    .split(' ')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+---
+
+<Layout title={`${film.title} - Studio Ghibli`}>
+	<header>
+		<div class="container">
+			<h1 class="logo">STUDIO GHIBLI</h1>
+			<a href="/" class="back-btn">
+				← Back to All Films
+			</a>
+		</div>
+	</header>
+
+	<main class="container">
+		<div class="film-detail">
+			<!-- Hero Banner -->
+			<div class="detail-hero">
+				<div style="position: relative; width: 100%; height: 400px; overflow: hidden;">
+					<img
+						src={bannerSrc}
+						alt={film.title}
+						width="1200"
+						height="400"
+						loading="eager"
+						decoding="async"
+						style="width: 100%; height: 100%; object-fit: cover; display: block;"
+					/>
+				</div>
+			</div>
+
+			<!-- Film Header -->
+			<div class="detail-header">
+				<h2>{film.title}</h2>
+				<div class="detail-original-title">
+					{film.original_title} ({film.original_title_romanised})
+				</div>
+
+				<div class="info-grid">
+					<div class="info-box">
+						<div class="info-box-label">Release Year</div>
+						<div class="info-box-value">{film.release_date}</div>
+					</div>
+					<div class="info-box">
+						<div class="info-box-label">Director</div>
+						<div class="info-box-value">{film.director}</div>
+					</div>
+					<div class="info-box">
+						<div class="info-box-label">Producer</div>
+						<div class="info-box-value">{film.producer}</div>
+					</div>
+					<div class="info-box">
+						<div class="info-box-label">Running Time</div>
+						<div class="info-box-value">{film.running_time} mins</div>
+					</div>
+					<div class="info-box">
+						<div class="info-box-label">RT Score</div>
+						<div class="info-box-value">⭐ {film.rt_score}%</div>
+					</div>
+				</div>
+
+				<div class="detail-description">{film.description}</div>
+			</div>
+
+			<!-- Characters Section -->
+			<div class="characters-section">
+				<h3 class="section-title">
+					Characters ({enrichedPeople.length})
+				</h3>
+				{enrichedPeople.length === 0 ? (
+					<p style="text-align: center; color: var(--text-dark);">
+						No character information available for this film.
+					</p>
+				) : (
+					<div class="characters-grid">
+						{enrichedPeople.map((person) => (
+							<div class="character-card">
+								<div class={`character-avatar ${getAvatarColor(person.gender)}`}>
+									{getInitials(person.name)}
+								</div>
+								<h4>{person.name}</h4>
+								<div class="character-details">
+									{person.gender && (
+										<div class="character-detail-item">
+											<span class="detail-label">Gender:</span>
+											<span class="detail-value">{capitalize(person.gender)}</span>
+										</div>
+									)}
+									{person.age && (
+										<div class="character-detail-item">
+											<span class="detail-label">Age:</span>
+											<span class="detail-value">{person.age}</span>
+										</div>
+									)}
+									{person.eye_color && (
+										<div class="character-detail-item">
+											<span class="detail-label">Eye Color:</span>
+											<span class="detail-value">{capitalize(person.eye_color)}</span>
+										</div>
+									)}
+									{person.hair_color && (
+										<div class="character-detail-item">
+											<span class="detail-label">Hair Color:</span>
+											<span class="detail-value">{capitalize(person.hair_color)}</span>
+										</div>
+									)}
+									{person.speciesData && (
+										<div class="character-detail-item">
+											<span class="detail-label">Species:</span>
+											<span class="detail-value">
+												<a href={`/species/${person.speciesData.id}`} class="species-link">
+													{person.speciesData.name}
+												</a>
+											</span>
+										</div>
+									)}
+								</div>
+							</div>
+						))}
+					</div>
+				)}
+			</div>
+
+			<!-- Additional Information -->
+			<div class="additional-section">
+				<h3 class="section-title">Additional Information</h3>
+
+				<!-- Locations -->
+				<div class="info-section">
+					<h4>Locations ({validLocations.length})</h4>
+					<div class="info-list">
+						{validLocations.length === 0 ? (
+							<div class="info-tag">None</div>
+						) : (
+							validLocations.map((location) => (
+								<div class="info-tag">
+									{location.name}
+								</div>
+							))
+						)}
+					</div>
+				</div>
+
+				<!-- Species -->
+				<div class="info-section">
+					<h4>Species ({validSpecies.length})</h4>
+					<div class="info-list">
+						{validSpecies.length === 0 ? (
+							<div class="info-tag">None</div>
+						) : (
+							validSpecies.map((spec) => (
+								<div class="info-tag">
+									{spec.name}
+								</div>
+							))
+						)}
+					</div>
+				</div>
+
+				<!-- Vehicles -->
+				<div class="info-section">
+					<h4>Vehicles ({validVehicles.length})</h4>
+					<div class="info-list">
+						{validVehicles.length === 0 ? (
+							<div class="info-tag">None</div>
+						) : (
+							validVehicles.map((vehicle) => (
+								<div class="info-tag">
+									{vehicle.name}
+								</div>
+							))
+						)}
+					</div>
+				</div>
+			</div>
+		</div>
+	</main>
+</Layout>
+
+<!-- Vanilla JS for Soot Sprite interactivity - Only ships if user interacts -->
+<script>
+  (function() {
+    const initSootEasterEgg = () => {
+      const sootSprites = document.querySelectorAll('.soot-sprite');
+      sootSprites.forEach((sprite) => {
+        sprite.addEventListener('click', (e) => {
+          e.stopPropagation();
+          triggerSootExplosion(sprite as HTMLElement, e as MouseEvent);
+        });
+      });
+    };
+
+    const triggerSootExplosion = (sprite: HTMLElement, clickEvent: MouseEvent) => {
+      if (sprite.classList.contains('soot-exploding')) return;
+
+      const clickX = clickEvent.clientX;
+      const clickY = clickEvent.clientY;
+
+      sprite.classList.add('soot-exploding');
+      sprite.style.animation = 'sootDisintegrate 1100ms ease-out forwards';
+
+      const particles = 12 + Math.floor(Math.random() * 8);
+      for (let i = 0; i < particles; i++) {
+        createParticle(clickX, clickY);
+      }
+
+      setTimeout(() => {
+        sprite.classList.add('soot-hidden');
+        sprite.classList.remove('soot-exploding');
+        sprite.style.animation = '';
+
+        setTimeout(() => {
+          sprite.classList.remove('soot-hidden');
+          sprite.style.animation = '';
+          sprite.style.top = '100%';
+          void sprite.offsetHeight;
+          sprite.style.animation = 'sootFloat 25s infinite ease-in-out';
+        }, 1000);
+      }, 1100);
+    };
+
+    const createParticle = (x: number, y: number) => {
+      const p = document.createElement('div');
+      p.className = 'soot-particle';
+      const size = 4 + Math.random() * 4;
+      p.style.width = size + 'px';
+      p.style.height = size + 'px';
+
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 40 + Math.random() * 120;
+      const upwardBias = -20 - Math.random() * 60;
+      const tx = Math.round(Math.cos(angle) * dist) + 'px';
+      const ty = Math.round(Math.sin(angle) * dist + upwardBias) + 'px';
+      const rot = Math.round((Math.random() - 0.5) * 720) + 'deg';
+
+      p.style.left = x - size / 2 + 'px';
+      p.style.top = y - size / 2 + 'px';
+      p.style.setProperty('--tx', tx);
+      p.style.setProperty('--ty', ty);
+      p.style.setProperty('--r', rot);
+      document.body.appendChild(p);
+
+      setTimeout(() => {
+        p.remove();
+      }, 1450);
+    };
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initSootEasterEgg);
+    } else {
+      initSootEasterEgg();
+    }
+  })();
+</script>
+
