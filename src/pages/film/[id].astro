@@ -27,7 +27,7 @@ if (!film) {
   return Astro.redirect('/404');
 }
 
-const bannerSrc = getFilmBanner(film.id, film.movie_banner || film.image);
+const bannerSrc = getFilmBanner(film.id);
 
 // Fetch all people (characters)
 const validPeopleUrls = film.people.filter(isValidResourceUrl);

@@ -764,12 +764,93 @@ footer a:hover {
   }
 }
 
-/* Kodama - removed for CO2 optimization */
+/* Kodama - forest spirits */
 .kodama-container {
-  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.6;
 }
 
-/* Leaves - removed for CO2 optimization */
+.kodama {
+  position: absolute;
+  width: 40px;
+  height: 50px;
+  background: radial-gradient(circle at 50% 30%, #ffffff 0%, #e0e0e0 100%);
+  border-radius: 50% 50% 50% 50% / 40% 40% 60% 60%;
+  animation: kodamaSway 4s ease-in-out infinite;
+}
+
+.kodama::before {
+  content: "";
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  background: #333;
+  border-radius: 50%;
+  top: 15px;
+  left: 12px;
+}
+
+.kodama::after {
+  content: "";
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  background: #333;
+  border-radius: 50%;
+  top: 15px;
+  right: 12px;
+}
+
+@keyframes kodamaSway {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-2deg);
+  }
+  50% {
+    transform: translateY(-10px) rotate(2deg);
+  }
+}
+
+/* Leaves - floating animation */
 .leaves {
-  display: none;
+  position: fixed;
+  top: -50px;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.leaf {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  background: linear-gradient(135deg, #8bc34a 0%, #689f38 100%);
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+  opacity: 0.7;
+  animation: leafFall 15s linear infinite;
+}
+
+@keyframes leafFall {
+  0% {
+    top: -50px;
+    transform: translateX(0) rotate(0deg);
+    opacity: 0.7;
+  }
+  50% {
+    transform: translateX(30px) rotate(180deg);
+  }
+  100% {
+    top: 100vh;
+    transform: translateX(-30px) rotate(360deg);
+    opacity: 0;
+  }
 }
